@@ -398,28 +398,76 @@ async function loadConfig() {
     const response = await fetch(`${API_BASE}/api/config`);
     const config = await response.json();
     
-    if (config.hasApiKey) {
-      document.getElementById('settingApiKey').value = config.apiKeyMasked;
-      document.getElementById('statusDot').classList.remove('disconnected');
-      document.getElementById('statusText').textContent = 'API Connected';
-    }
-    
     if (config.apiProvider) {
       document.getElementById('settingProvider').value = config.apiProvider;
     }
+
+    const badgeVeriphone = document.getElementById('badgeVeriphoneKey');
+    const badgePhonevalidator = document.getElementById('badgePhonevalidatorKey');
+
+    if (config.hasVeriphoneKey) {
+      document.getElementById('settingVeriphoneKey').value = config.veriphoneKeyMasked;
+      if (badgeVeriphone) {
+        badgeVeriphone.textContent = 'Configured ✅';
+        badgeVeriphone.style.background = 'rgba(16,185,129,0.15)';
+        badgeVeriphone.style.color = '#10B981';
+      }
+    } else {
+      document.getElementById('settingVeriphoneKey').value = '';
+      if (badgeVeriphone) {
+        badgeVeriphone.textContent = 'Not Set ⚠️';
+        badgeVeriphone.style.background = 'rgba(239,68,68,0.15)';
+        badgeVeriphone.style.color = '#EF4444';
+      }
+    }
+
+    if (config.hasPhonevalidatorKey) {
+      document.getElementById('settingPhonevalidatorKey').value = config.phonevalidatorKeyMasked;
+      if (badgePhonevalidator) {
+        badgePhonevalidator.textContent = 'Configured ✅';
+        badgePhonevalidator.style.background = 'rgba(16,185,129,0.15)';
+        badgePhonevalidator.style.color = '#10B981';
+      }
+    } else {
+      document.getElementById('settingPhonevalidatorKey').value = '';
+      if (badgePhonevalidator) {
+        badgePhonevalidator.textContent = 'Not Set ⚠️';
+        badgePhonevalidator.style.background = 'rgba(239,68,68,0.15)';
+        badgePhonevalidator.style.color = '#EF4444';
+      }
+    }
+
+    // Header status pill
+    const activeProviderName = config.apiProvider === 'phonevalidator' ? 'PhoneValidator' : 'Veriphone';
+    if (config.hasApiKey) {
+      document.getElementById('statusDot').classList.remove('disconnected');
+      document.getElementById('statusText').textContent = `${activeProviderName} Active ✅`;
+    } else {
+      document.getElementById('statusDot').classList.add('disconnected');
+      document.getElementById('statusText').textContent = `${activeProviderName} (No Key)`;
+    }
+
+    calculateCost();
   } catch (error) {
     console.error('Failed to load config:', error);
   }
 }
 
+function onProviderChange() {
+  calculateCost();
+}
+
 async function saveSettings() {
-  const apiKey = document.getElementById('settingApiKey').value.trim();
+  const veriphoneKey = document.getElementById('settingVeriphoneKey').value.trim();
+  const phonevalidatorKey = document.getElementById('settingPhonevalidatorKey').value.trim();
   const apiProvider = document.getElementById('settingProvider').value;
 
-  // Don't save masked key
   const body = { apiProvider };
-  if (apiKey && !apiKey.includes('*')) {
-    body.apiKey = apiKey;
+  if (veriphoneKey && !veriphoneKey.includes('*')) {
+    body.veriphoneApiKey = veriphoneKey;
+  }
+  if (phonevalidatorKey && !phonevalidatorKey.includes('*')) {
+    body.phonevalidatorApiKey = phonevalidatorKey;
   }
 
   try {

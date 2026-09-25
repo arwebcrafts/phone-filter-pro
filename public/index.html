@@ -220,34 +220,41 @@
     <!-- ===== SETTINGS PAGE ===== -->
     <section class="page" id="page-settings">
       <h2 class="section-title">App <span>Settings</span></h2>
-      <p class="section-subtitle">Configure your API key and preferences.</p>
+      <p class="section-subtitle">Configure your API provider and manage separate API keys.</p>
 
       <div class="settings-grid">
         <div class="setting-group">
-          <h4 class="setting-title">🔑 API Key</h4>
-          <p class="setting-desc">Enter your API key for the selected provider below.</p>
-          <input type="password" class="setting-input" id="settingApiKey" placeholder="Enter your API key...">
-          <p class="input-hint" style="margin-top: 8px; color: var(--accent-warning, #eab308);">⚠️ Note: Veriphone and PhoneValidator.com require separate API keys from their respective sites.</p>
-        </div>
-
-        <div class="setting-group">
-          <h4 class="setting-title">🌐 API Provider</h4>
-          <p class="setting-desc">Select your phone verification provider.</p>
-          <select class="setting-select" id="settingProvider" onchange="calculateCost()">
-            <option value="veriphone">Veriphone (Recommended — $0.0002/lookup)</option>
-            <option value="phonevalidator">PhoneValidator.com ($0.004/lookup — Ported Carrier Detection Included)</option>
-            <option value="telnyx">Telnyx ($0.004/lookup)</option>
-            <option value="twilio">Twilio ($0.008/lookup)</option>
-            <option value="numverify">NumVerify ($0.002/lookup)</option>
-            <option value="abstractapi">AbstractAPI ($0.001/lookup)</option>
+          <h4 class="setting-title">🌐 Active Provider</h4>
+          <p class="setting-desc">Choose which provider to use for phone verification.</p>
+          <select class="setting-select" id="settingProvider" onchange="onProviderChange()">
+            <option value="veriphone">Veriphone.io (Recommended — Standard Line Type & Carrier Lookup)</option>
+            <option value="phonevalidator">PhoneValidator.com (Includes Live Ported Carrier Check)</option>
           </select>
         </div>
 
         <div class="setting-group">
+          <h4 class="setting-title">🔑 Veriphone API Key</h4>
+          <p class="setting-desc">Get your free/paid key from <a href="https://veriphone.io" target="_blank" style="color: var(--accent-primary);">veriphone.io</a></p>
+          <div style="display: flex; gap: 8px; align-items: center;">
+            <input type="password" class="setting-input" id="settingVeriphoneKey" placeholder="Enter Veriphone API Key..." style="flex: 1;">
+            <span class="format-badge" id="badgeVeriphoneKey" style="background: rgba(239,68,68,0.15); color: #EF4444; white-space: nowrap;">Not Set</span>
+          </div>
+        </div>
+
+        <div class="setting-group">
+          <h4 class="setting-title">🔑 PhoneValidator.com API Key</h4>
+          <p class="setting-desc">Get your key from <a href="https://www.phonevalidator.com" target="_blank" style="color: var(--accent-primary);">phonevalidator.com</a></p>
+          <div style="display: flex; gap: 8px; align-items: center;">
+            <input type="password" class="setting-input" id="settingPhonevalidatorKey" placeholder="Enter PhoneValidator API Key..." style="flex: 1;">
+            <span class="format-badge" id="badgePhonevalidatorKey" style="background: rgba(239,68,68,0.15); color: #EF4444; white-space: nowrap;">Not Set</span>
+          </div>
+        </div>
+
+        <div class="setting-group">
           <h4 class="setting-title">💰 Cost Estimator</h4>
-          <p class="setting-desc">Estimate your verification costs.</p>
+          <p class="setting-desc">Estimate your verification costs based on active provider.</p>
           <div class="input-group" style="margin-bottom: 12px;">
-            <input type="number" class="input-field" id="costLeads" placeholder="Number of leads" value="30000" style="max-width: 200px;">
+            <input type="number" class="input-field" id="costLeads" placeholder="Number of leads" value="200" style="max-width: 200px;">
             <button class="btn btn-ghost btn-sm" onclick="calculateCost()">Calculate</button>
           </div>
           <div id="costResult" style="font-size: 14px; color: var(--text-secondary);"></div>

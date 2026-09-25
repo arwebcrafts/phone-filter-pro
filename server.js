@@ -46,20 +46,31 @@ const upload = multer({
 const uploadStore = new Map();
 const jobResultsStore = new Map();
 
-// In-memory config store
+// In-memory config store supporting separate provider keys
 let config = {
-  apiKey: process.env.API_KEY || '',
-  apiProvider: process.env.API_PROVIDER || 'veriphone'
+  apiProvider: process.env.API_PROVIDER || 'veriphone',
+  veriphoneApiKey: process.env.VERIPHONE_API_KEY || process.env.API_KEY || '',
+  phonevalidatorApiKey: process.env.PHONEVALIDATOR_API_KEY || '',
+  apiKey: process.env.API_KEY || ''
 };
 
 // Load config from file if exists
 const CONFIG_FILE = path.join(__dirname, 'config.json');
 if (fs.existsSync(CONFIG_FILE)) {
   try {
-    config = JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8'));
+    const loaded = JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8'));
+    config = { ...config, ...loaded };
   } catch (e) {
     console.log('Could not load config, using defaults');
   }
+}
+
+function getActiveApiKey(provider) {
+  const p = provider || config.apiProvider;
+  if (p === 'phonevalidator') {
+    return config.phonevalidatorApiKey || config.apiKey || '';
+  }
+  return config.veriphoneApiKey || config.apiKey || '';
 }
 
 // Save config
@@ -76,17 +87,42 @@ const sseClients = new Map();
 
 // Config endpoints
 app.get('/api/config', (req, res) => {
+  const veriphoneKey = config.veriphoneApiKey || (config.apiProvider === 'veriphone' ? config.apiKey : '');
+  const phonevalidatorKey = config.phonevalidatorApiKey || (config.apiProvider === 'phonevalidator' ? config.apiKey : '');
+  const activeKey = getActiveApiKey(config.apiProvider);
+
+  function maskKey(key) {
+    if (!key) return '';
+    return `${key.slice(0, 4)}${'*'.repeat(Math.max(0, key.length - 8))}${key.slice(-4)}`;
+  }
+
   res.json({
     apiProvider: config.apiProvider,
-    hasApiKey: !!config.apiKey,
-    apiKeyMasked: config.apiKey ? `${config.apiKey.slice(0, 4)}${'*'.repeat(Math.max(0, config.apiKey.length - 8))}${config.apiKey.slice(-4)}` : ''
+    hasApiKey: !!activeKey,
+    apiKeyMasked: maskKey(activeKey),
+    hasVeriphoneKey: !!veriphoneKey,
+    veriphoneKeyMasked: maskKey(veriphoneKey),
+    hasPhonevalidatorKey: !!phonevalidatorKey,
+    phonevalidatorKeyMasked: maskKey(phonevalidatorKey)
   });
 });
 
 app.post('/api/config', (req, res) => {
-  const { apiKey, apiProvider } = req.body;
-  if (apiKey !== undefined) config.apiKey = apiKey;
+  const { apiKey, apiProvider, veriphoneApiKey, phonevalidatorApiKey } = req.body;
   if (apiProvider !== undefined) config.apiProvider = apiProvider;
+  
+  if (veriphoneApiKey !== undefined) config.veriphoneApiKey = veriphoneApiKey;
+  if (phonevalidatorApiKey !== undefined) config.phonevalidatorApiKey = phonevalidatorApiKey;
+
+  if (apiKey !== undefined && !apiKey.includes('*')) {
+    if (config.apiProvider === 'phonevalidator') {
+      config.phonevalidatorApiKey = apiKey;
+    } else {
+      config.veriphoneApiKey = apiKey;
+    }
+    config.apiKey = apiKey;
+  }
+  
   saveConfig();
   res.json({ success: true, message: 'Configuration saved!' });
 });
@@ -368,8 +404,9 @@ function sleep(ms) {
 app.post('/api/verify', async (req, res) => {
   const { uploadId, phoneColumns, countryCode } = req.body;
 
-  if (!config.apiKey) {
-    return res.status(400).json({ error: 'API key not configured. Go to Settings to add your Veriphone API key.' });
+  const activeKey = getActiveApiKey(config.apiProvider);
+  if (!activeKey) {
+    return res.status(400).json({ error: `API key not configured for '${config.apiProvider}'. Go to Settings to add your API key.` });
   }
 
   // Load upload info from memory store or disk
@@ -455,7 +492,8 @@ async function processVerification(jobId, uploadInfo, phoneColumns, countryCode)
         // Format phone number with robust fallback
         const fullPhone = formatPhoneNumber(phoneValue, countryCode);
 
-        const result = await verifyPhone(fullPhone, config.apiKey, config.apiProvider);
+        const activeKey = getActiveApiKey(config.apiProvider);
+        const result = await verifyPhone(fullPhone, activeKey, config.apiProvider);
         
         // Add results as new columns
         row[`${phoneCol}_valid`] = result.phone_valid;
