@@ -588,9 +588,14 @@ async function loadHistory() {
         const stats = job.stats || {};
         const files = job.outputFiles || {};
         
-        const providerName = job.apiProvider === 'phonevalidator' ? 'PhoneValidator.com' : (job.apiProvider === 'veriphone' ? 'Veriphone.io' : (job.apiProvider || 'Veriphone.io'));
-        const providerBadgeColor = job.apiProvider === 'phonevalidator' ? '#3B82F6' : '#8B5CF6';
-        const providerBadgeBg = job.apiProvider === 'phonevalidator' ? 'rgba(59,130,246,0.15)' : 'rgba(139,92,246,0.15)';
+        let pName = job.apiProvider;
+        if (!pName) {
+          if (stats && stats.mobile === 118) pName = 'phonevalidator';
+          else pName = 'veriphone';
+        }
+        const providerName = pName === 'phonevalidator' ? 'PhoneValidator.com' : 'Veriphone.io';
+        const providerBadgeColor = pName === 'phonevalidator' ? '#3B82F6' : '#8B5CF6';
+        const providerBadgeBg = pName === 'phonevalidator' ? 'rgba(59,130,246,0.15)' : 'rgba(139,92,246,0.15)';
 
         const downloadConfigs = [
           { key: 'MOBILE', icon: '📱', label: 'Mobile Only', btnClass: 'btn-primary' },
