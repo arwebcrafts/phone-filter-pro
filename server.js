@@ -630,6 +630,7 @@ app.get('/api/history', (req, res) => {
 // List output files
 app.get('/api/outputs', (req, res) => {
   try {
+    if (!fs.existsSync(OUTPUT_DIR)) return res.json({ files: [] });
     const files = fs.readdirSync(OUTPUT_DIR)
       .filter(f => f.endsWith('.csv'))
       .map(f => {
