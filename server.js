@@ -659,7 +659,7 @@ app.get('*', (req, res) => {
 // Export app for Vercel serverless functions
 module.exports = app;
 
-if (require.main === module) {
+if (require.main === module && !process.env.VERCEL) {
   app.listen(PORT, () => {
     console.log(`\n🚀 Phone Verification Tool running at http://localhost:${PORT}`);
     console.log(`📂 Output folder: ${OUTPUT_DIR}`);
