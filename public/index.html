@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Bulk phone number verification tool - Detect Mobile, Landline, VoIP numbers. Upload CSV/Excel, verify thousands of phone numbers, and export clean data.">
+  <title>PhoneFilter Pro — Bulk Phone Verification</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📱</text></svg>">
+</head>
+<body>
+
+  <!-- ========== HEADER ========== -->
+  <header class="app-header">
+    <div class="header-inner">
+      <a href="#" class="logo" onclick="switchPage('upload'); return false;">
+        <div class="logo-icon">📱</div>
+        <div class="logo-text"><span>PhoneFilter</span> Pro</div>
+      </a>
+
+      <nav class="nav-tabs" id="navTabs">
+        <button class="nav-tab active" data-page="upload" onclick="switchPage('upload')">
+          <span class="tab-icon">📤</span> Upload
+        </button>
+        <button class="nav-tab" data-page="verify" onclick="switchPage('verify')">
+          <span class="tab-icon">🔍</span> Verify
+        </button>
+        <button class="nav-tab" data-page="history" onclick="switchPage('history')">
+          <span class="tab-icon">📁</span> History
+        </button>
+        <button class="nav-tab" data-page="settings" onclick="switchPage('settings')">
+          <span class="tab-icon">⚙️</span> Settings
+        </button>
+      </nav>
+
+      <div class="header-actions">
+        <div class="status-pill" id="apiStatus">
+          <span class="status-dot disconnected" id="statusDot"></span>
+          <span id="statusText">No API Key</span>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- ========== MAIN ========== -->
+  <main class="app-main">
+
+    <!-- ===== UPLOAD PAGE ===== -->
+    <section class="page active" id="page-upload">
+      <div class="upload-section">
+        <h1 class="section-title">Upload Your <span>Data</span></h1>
+        <p class="section-subtitle">Drop your CSV or Excel file to get started. We'll auto-detect phone columns and verify every number.</p>
+
+        <div class="upload-zone" id="uploadZone" onclick="document.getElementById('fileInput').click()">
+          <div class="upload-zone-content">
+            <span class="upload-icon">📂</span>
+            <h2 class="upload-title">Drag & Drop your file here</h2>
+            <p class="upload-desc">or click to browse files</p>
+            <div class="upload-formats">
+              <span class="format-badge">.csv</span>
+              <span class="format-badge">.xlsx</span>
+              <span class="format-badge">.xls</span>
+            </div>
+          </div>
+          <input type="file" id="fileInput" class="upload-input" accept=".csv,.xlsx,.xls">
+        </div>
+      </div>
+
+      <!-- File Preview (shown after upload) -->
+      <div id="filePreview" style="display: none;">
+        <div class="card file-info-card">
+          <div class="card-header">
+            <h3 class="card-title"><span class="icon">📄</span> File Overview</h3>
+            <button class="btn btn-ghost btn-sm" onclick="resetUpload()">
+              <span class="btn-icon">✕</span> Remove
+            </button>
+          </div>
+
+          <div class="file-stats" id="fileStats"></div>
+
+          <h4 style="font-size: 14px; font-weight: 600; margin-bottom: 12px; color: var(--text-secondary);">📊 Data Preview (First 5 Rows)</h4>
+          <div class="table-container" id="previewTable"></div>
+        </div>
+
+        <!-- Column Selector -->
+        <div class="card column-selector">
+          <div class="card-header">
+            <h3 class="card-title"><span class="icon">📞</span> Select Phone Column(s) to Verify</h3>
+          </div>
+          <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 12px;">
+            Select which columns contain phone numbers. Auto-detected columns are highlighted in green.
+          </p>
+          <div class="columns-grid" id="columnsGrid"></div>
+        </div>
+
+        <!-- Country Code -->
+        <div class="card country-code-section">
+          <div class="card-header">
+            <h3 class="card-title"><span class="icon">🌍</span> Default Country Code (Optional)</h3>
+          </div>
+          <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 12px;">
+            If your phone numbers don't include a country code prefix, add one here.
+          </p>
+          <div class="input-group">
+            <input type="text" class="input-field" id="countryCode" value="+1" placeholder="e.g. +1 for US, +44 for UK, +91 for India" style="max-width: 400px;">
+          </div>
+          <p class="input-hint">Leave empty if your numbers already include the country code (e.g., +14155552671)</p>
+        </div>
+
+        <!-- Start Verification Button -->
+        <div class="verify-actions">
+          <button class="btn btn-primary btn-lg" id="startVerifyBtn" onclick="startVerification()" disabled>
+            <span class="btn-icon">🚀</span> Start Verification
+          </button>
+          <span id="selectedCount" style="font-size: 13px; color: var(--text-muted);">No columns selected</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== VERIFY PAGE ===== -->
+    <section class="page" id="page-verify">
+      <!-- Progress Panel -->
+      <div class="progress-section" id="progressPanel">
+        <h2 class="section-title">Verifying <span>Phone Numbers</span></h2>
+        <p class="section-subtitle" id="progressMessage">Preparing verification...</p>
+
+        <div class="card" style="margin-bottom: 24px;">
+          <div class="progress-header">
+            <span style="font-size: 14px; font-weight: 600;" id="progressPercent">0%</span>
+            <span style="font-size: 13px; color: var(--text-muted);" id="progressCount">0 / 0</span>
+          </div>
+          <div class="progress-bar-container">
+            <div class="progress-bar" id="progressBar" style="width: 0%"></div>
+          </div>
+
+          <div class="progress-stats" id="progressStats">
+            <div class="progress-stat">
+              <div class="progress-stat-value mobile" id="statMobile">0</div>
+              <div class="progress-stat-label">📱 Mobile</div>
+            </div>
+            <div class="progress-stat">
+              <div class="progress-stat-value landline" id="statLandline">0</div>
+              <div class="progress-stat-label">☎️ Landline</div>
+            </div>
+            <div class="progress-stat">
+              <div class="progress-stat-value voip" id="statVoip">0</div>
+              <div class="progress-stat-label">🌐 VoIP</div>
+            </div>
+            <div class="progress-stat">
+              <div class="progress-stat-value invalid" id="statInvalid">0</div>
+              <div class="progress-stat-label">❌ Invalid</div>
+            </div>
+            <div class="progress-stat">
+              <div class="progress-stat-value total" id="statProcessed">0</div>
+              <div class="progress-stat-label">📊 Processed</div>
+            </div>
+          </div>
+
+          <!-- Live Log -->
+          <h4 style="font-size: 13px; font-weight: 600; margin-bottom: 8px; color: var(--text-secondary);">📋 Activity Log</h4>
+          <div class="log-area" id="logArea">
+            <div class="log-entry info"><span class="time">[--:--:--]</span> Waiting to start...</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Results Panel -->
+      <div class="results-section" id="resultsPanel">
+        <h2 class="section-title">Verification <span>Complete</span> ✅</h2>
+        <p class="section-subtitle" id="resultsSubtitle"></p>
+
+        <div class="results-summary" id="resultsSummary"></div>
+
+        <div class="card">
+          <div class="card-header">
+            <h3 class="card-title"><span class="icon">📥</span> Download Verified Data</h3>
+          </div>
+          <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 16px;">
+            Your original data is preserved with new verification columns added.
+          </p>
+          <div class="download-actions" id="downloadActions"></div>
+        </div>
+
+        <div class="save-banner" id="saveBanner" style="display: none;">
+          <span class="save-banner-icon">💾</span>
+          <div class="save-banner-text">
+            <div class="save-banner-title">File auto-saved to your folder!</div>
+            <div class="save-banner-path" id="savePath"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Empty state -->
+      <div id="verifyEmpty">
+        <div class="empty-state">
+          <div class="empty-state-icon">🔍</div>
+          <h3 class="empty-state-title">No verification in progress</h3>
+          <p class="empty-state-desc">Upload a file first, then come back here to track verification progress.</p>
+          <button class="btn btn-ghost" style="margin-top: 16px;" onclick="switchPage('upload')">
+            <span class="btn-icon">📤</span> Go to Upload
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== HISTORY PAGE ===== -->
+    <section class="page" id="page-history">
+      <h2 class="section-title">Output <span>History</span></h2>
+      <p class="section-subtitle">Previously verified files ready for download.</p>
+
+      <div class="history-list" id="historyList">
+        <div class="empty-state">
+          <div class="empty-state-icon">📁</div>
+          <h3 class="empty-state-title">No files yet</h3>
+          <p class="empty-state-desc">Verified files will appear here after processing.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== SETTINGS PAGE ===== -->
+    <section class="page" id="page-settings">
+      <h2 class="section-title">App <span>Settings</span></h2>
+      <p class="section-subtitle">Configure your API key and preferences.</p>
+
+      <div class="settings-grid">
+        <div class="setting-group">
+          <h4 class="setting-title">🔑 API Key</h4>
+          <p class="setting-desc">Enter your API key for the selected provider below.</p>
+          <input type="password" class="setting-input" id="settingApiKey" placeholder="Enter your API key...">
+          <p class="input-hint" style="margin-top: 8px; color: var(--accent-warning, #eab308);">⚠️ Note: Veriphone and PhoneValidator.com require separate API keys from their respective sites.</p>
+        </div>
+
+        <div class="setting-group">
+          <h4 class="setting-title">🌐 API Provider</h4>
+          <p class="setting-desc">Select your phone verification provider.</p>
+          <select class="setting-select" id="settingProvider" onchange="calculateCost()">
+            <option value="veriphone">Veriphone (Recommended — $0.0002/lookup)</option>
+            <option value="phonevalidator">PhoneValidator.com ($0.004/lookup — Ported Carrier Detection Included)</option>
+            <option value="telnyx">Telnyx ($0.004/lookup)</option>
+            <option value="twilio">Twilio ($0.008/lookup)</option>
+            <option value="numverify">NumVerify ($0.002/lookup)</option>
+            <option value="abstractapi">AbstractAPI ($0.001/lookup)</option>
+          </select>
+        </div>
+
+        <div class="setting-group">
+          <h4 class="setting-title">💰 Cost Estimator</h4>
+          <p class="setting-desc">Estimate your verification costs.</p>
+          <div class="input-group" style="margin-bottom: 12px;">
+            <input type="number" class="input-field" id="costLeads" placeholder="Number of leads" value="30000" style="max-width: 200px;">
+            <button class="btn btn-ghost btn-sm" onclick="calculateCost()">Calculate</button>
+          </div>
+          <div id="costResult" style="font-size: 14px; color: var(--text-secondary);"></div>
+        </div>
+
+        <button class="btn btn-primary" onclick="saveSettings()">
+          <span class="btn-icon">💾</span> Save Settings
+        </button>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Toast Container -->
+  <div class="toast-container" id="toastContainer"></div>
+
+  <script src="app.js"></script>
+</body>
+</html>
