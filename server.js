@@ -603,6 +603,7 @@ async function processVerification(jobId, uploadInfo, phoneColumns, countryCode)
   // Save batch job metadata for organized History view
   const jobMeta = {
     jobId,
+    apiProvider: config.apiProvider,
     originalName: uploadInfo.originalName,
     timestamp: new Date().toISOString(),
     totalRows,
@@ -627,6 +628,7 @@ async function processVerification(jobId, uploadInfo, phoneColumns, countryCode)
 
   sendProgress(jobId, {
     type: 'complete',
+    apiProvider: config.apiProvider,
     processed: processedCount,
     totalRows,
     percent: 100,
@@ -637,7 +639,7 @@ async function processVerification(jobId, uploadInfo, phoneColumns, countryCode)
     outputFiles,
     outputFileName: outputFiles.ALL?.fileName || '',
     autoSavePath: outputFiles.ALL?.autoSavePath || '',
-    message: `✅ Verification complete! ${processedCount} records processed.`
+    message: `✅ Verification complete! ${processedCount} records processed via ${config.apiProvider}.`
   });
 }
 

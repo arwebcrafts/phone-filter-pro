@@ -588,6 +588,10 @@ async function loadHistory() {
         const stats = job.stats || {};
         const files = job.outputFiles || {};
         
+        const providerName = job.apiProvider === 'phonevalidator' ? 'PhoneValidator.com' : (job.apiProvider === 'veriphone' ? 'Veriphone.io' : (job.apiProvider || 'Veriphone.io'));
+        const providerBadgeColor = job.apiProvider === 'phonevalidator' ? '#3B82F6' : '#8B5CF6';
+        const providerBadgeBg = job.apiProvider === 'phonevalidator' ? 'rgba(59,130,246,0.15)' : 'rgba(139,92,246,0.15)';
+
         const downloadConfigs = [
           { key: 'MOBILE', icon: '📱', label: 'Mobile Only', btnClass: 'btn-primary' },
           { key: 'LANDLINE', icon: '☎️', label: 'Landline Only', btnClass: 'btn-ghost' },
@@ -613,7 +617,10 @@ async function loadHistory() {
           <div class="card" style="margin-bottom: 20px;">
             <div class="card-header" style="padding-bottom: 10px; border-bottom: 1px solid var(--border-subtle);">
               <div>
-                <h3 class="card-title" style="font-size: 16px; font-weight: 700;">📄 ${escapeHtml(job.originalName)}</h3>
+                <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                  <h3 class="card-title" style="font-size: 16px; font-weight: 700;">📄 ${escapeHtml(job.originalName)}</h3>
+                  <span class="format-badge" style="background: ${providerBadgeBg}; color: ${providerBadgeColor}; font-size: 11px; font-weight: 600;">⚡ Provider: ${providerName}</span>
+                </div>
                 <span style="font-size: 12px; color: var(--text-muted);">${formatDate(job.timestamp)} • ${job.totalRows.toLocaleString()} total rows</span>
               </div>
             </div>
