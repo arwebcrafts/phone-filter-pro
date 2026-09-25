@@ -644,9 +644,12 @@ app.get('/api/outputs', (req, res) => {
   }
 });
 
-// Health check
-app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+// Catch-all route to serve index.html for frontend
+app.get('*', (req, res) => {
+  if (req.path.startsWith('/api/')) {
+    return res.status(404).json({ error: 'API endpoint not found' });
+  }
+  res.sendFile(path.join(PUBLIC_DIR, 'index.html'));
 });
 
 // Export app for Vercel serverless functions
