@@ -13,9 +13,13 @@ const UPLOAD_DIR = path.join(__dirname, 'uploads');
 const OUTPUT_DIR = path.join(__dirname, 'output');
 const PUBLIC_DIR = path.join(__dirname, 'public');
 
-// Ensure directories exist
+// Ensure directories exist safely (catch read-only filesystem errors on Vercel)
 [UPLOAD_DIR, OUTPUT_DIR].forEach(dir => {
-  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+  try {
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+  } catch (e) {
+    // Read-only filesystem on Vercel serverless environment
+  }
 });
 
 // Middleware
