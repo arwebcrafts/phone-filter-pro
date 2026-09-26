@@ -1,7 +1,9 @@
 // ========== API BASE URL ==========
-const API_BASE = (window.location.protocol === 'http:' || window.location.protocol === 'https:') && (window.location.port === '3847')
-  ? ''
-  : 'http://localhost:3847';
+// On Vercel or when served from the same origin, use '' (same origin).
+// Only use localhost:3847 if we're on a different local dev port trying to reach the backend.
+const API_BASE = (window.location.hostname === 'localhost' && window.location.port !== '3847' && window.location.port !== '')
+  ? 'http://localhost:3847'
+  : '';
 
 // ========== STATE ==========
 let currentUpload = null;
@@ -477,14 +479,20 @@ async function saveSettings() {
       body: JSON.stringify(body)
     });
 
+    if (!response.ok) {
+      throw new Error(`Server error ${response.status}`);
+    }
+
     const result = await response.json();
     
     if (result.success) {
-      showToast('Settings saved successfully!', 'success');
+      showToast(result.message || 'Settings saved successfully!', 'success');
       loadConfig(); // Refresh display
+    } else {
+      showToast(result.error || 'Failed to save settings', 'error');
     }
   } catch (error) {
-    showToast(`Failed to save: ${error.message}`, 'error');
+    showToast(`Failed to save: ${error.message}. Make sure the server is running.`, 'error');
   }
 }
 

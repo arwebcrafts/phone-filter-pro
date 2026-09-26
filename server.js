@@ -103,7 +103,8 @@ app.get('/api/config', (req, res) => {
     hasVeriphoneKey: !!veriphoneKey,
     veriphoneKeyMasked: maskKey(veriphoneKey),
     hasPhonevalidatorKey: !!phonevalidatorKey,
-    phonevalidatorKeyMasked: maskKey(phonevalidatorKey)
+    phonevalidatorKeyMasked: maskKey(phonevalidatorKey),
+    isVercel: !!process.env.VERCEL
   });
 });
 
@@ -124,7 +125,14 @@ app.post('/api/config', (req, res) => {
   }
   
   saveConfig();
-  res.json({ success: true, message: 'Configuration saved!' });
+
+  const isVercel = !!process.env.VERCEL;
+  res.json({ 
+    success: true, 
+    message: isVercel 
+      ? 'Settings saved for this session! For permanent keys on Vercel, set VERIPHONE_API_KEY and PHONEVALIDATOR_API_KEY in your Vercel Environment Variables.'
+      : 'Configuration saved!'
+  });
 });
 
 // File upload and parsing
