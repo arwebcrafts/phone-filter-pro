@@ -75,11 +75,15 @@ if (fs.existsSync(CONFIG_FILE)) {
 
 // Migrate legacy single key to pool if pool is empty
 function migrateLegacyKeys() {
-  if (config.veriphoneApiKey && config.veriphoneKeys.length === 0) {
-    config.veriphoneKeys.push({ key: config.veriphoneApiKey, label: 'Default Key', credits: null, lastChecked: null });
+  // Migrate legacy veriphone key
+  const legacyVeriphoneKey = config.veriphoneApiKey || (config.apiProvider === 'veriphone' ? config.apiKey : '');
+  if (legacyVeriphoneKey && config.veriphoneKeys.length === 0) {
+    config.veriphoneKeys.push({ key: legacyVeriphoneKey, label: 'Default Key', credits: null, lastChecked: null });
   }
-  if (config.phonevalidatorApiKey && config.phonevalidatorKeys.length === 0) {
-    config.phonevalidatorKeys.push({ key: config.phonevalidatorApiKey, label: 'Default Key' });
+  // Migrate legacy phonevalidator key
+  const legacyPvKey = config.phonevalidatorApiKey || (config.apiProvider === 'phonevalidator' ? config.apiKey : '');
+  if (legacyPvKey && config.phonevalidatorKeys.length === 0) {
+    config.phonevalidatorKeys.push({ key: legacyPvKey, label: 'Default Key' });
   }
 }
 migrateLegacyKeys();
