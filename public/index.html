@@ -220,36 +220,60 @@
     <!-- ===== SETTINGS PAGE ===== -->
     <section class="page" id="page-settings">
       <h2 class="section-title">App <span>Settings</span></h2>
-      <p class="section-subtitle">Configure your API provider and manage separate API keys.</p>
+      <p class="section-subtitle">Manage your API key pool and provider settings.</p>
 
       <div class="settings-grid">
+        <!-- Provider Selection -->
         <div class="setting-group">
           <h4 class="setting-title">🌐 Active Provider</h4>
           <p class="setting-desc">Choose which provider to use for phone verification.</p>
           <select class="setting-select" id="settingProvider" onchange="onProviderChange()">
-            <option value="veriphone">Veriphone.io (Recommended — Standard Line Type & Carrier Lookup)</option>
+            <option value="veriphone">Veriphone.io (Recommended — 1000 Free Credits per Account)</option>
             <option value="phonevalidator">PhoneValidator.com (Includes Live Ported Carrier Check)</option>
           </select>
+          <button class="btn btn-ghost btn-sm" onclick="saveSettings()" style="margin-top: 8px;">
+            <span class="btn-icon">💾</span> Save Provider
+          </button>
         </div>
 
+        <!-- Veriphone Key Pool -->
         <div class="setting-group">
-          <h4 class="setting-title">🔑 Veriphone API Key</h4>
-          <p class="setting-desc">Get your free/paid key from <a href="https://veriphone.io" target="_blank" style="color: var(--accent-primary);">veriphone.io</a></p>
-          <div style="display: flex; gap: 8px; align-items: center;">
-            <input type="password" class="setting-input" id="settingVeriphoneKey" placeholder="Enter Veriphone API Key..." style="flex: 1;">
-            <span class="format-badge" id="badgeVeriphoneKey" style="background: rgba(239,68,68,0.15); color: #EF4444; white-space: nowrap;">Not Set</span>
+          <h4 class="setting-title">🔑 Veriphone API Key Pool</h4>
+          <p class="setting-desc">Add multiple free accounts (1000 credits each) from <a href="https://veriphone.io" target="_blank" style="color: var(--accent-primary);">veriphone.io</a>. Keys auto-rotate when credits run out.</p>
+          
+          <div style="display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap;">
+            <input type="text" class="setting-input" id="newVeriphoneLabel" placeholder="Label (e.g. Gmail 1)" style="max-width: 160px;">
+            <input type="password" class="setting-input" id="newVeriphoneKey" placeholder="Paste Veriphone API Key..." style="flex: 1; min-width: 200px;">
+            <button class="btn btn-primary btn-sm" onclick="addKey('veriphone')">
+              <span class="btn-icon">➕</span> Add Key
+            </button>
           </div>
+
+          <div id="veriphonePoolSummary" style="margin-bottom: 12px;"></div>
+          <div id="veriphoneKeysList"></div>
+
+          <button class="btn btn-ghost btn-sm" onclick="checkAllCredits()" style="margin-top: 8px;">
+            <span class="btn-icon">🔄</span> Check All Credits
+          </button>
         </div>
 
+        <!-- PhoneValidator Key Pool -->
         <div class="setting-group">
-          <h4 class="setting-title">🔑 PhoneValidator.com API Key</h4>
-          <p class="setting-desc">Get your key from <a href="https://www.phonevalidator.com" target="_blank" style="color: var(--accent-primary);">phonevalidator.com</a></p>
-          <div style="display: flex; gap: 8px; align-items: center;">
-            <input type="password" class="setting-input" id="settingPhonevalidatorKey" placeholder="Enter PhoneValidator API Key..." style="flex: 1;">
-            <span class="format-badge" id="badgePhonevalidatorKey" style="background: rgba(239,68,68,0.15); color: #EF4444; white-space: nowrap;">Not Set</span>
+          <h4 class="setting-title">🔑 PhoneValidator.com API Keys</h4>
+          <p class="setting-desc">Add keys from <a href="https://www.phonevalidator.com" target="_blank" style="color: var(--accent-primary);">phonevalidator.com</a></p>
+          
+          <div style="display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap;">
+            <input type="text" class="setting-input" id="newPvLabel" placeholder="Label (e.g. Account 1)" style="max-width: 160px;">
+            <input type="password" class="setting-input" id="newPvKey" placeholder="Paste PhoneValidator API Key..." style="flex: 1; min-width: 200px;">
+            <button class="btn btn-primary btn-sm" onclick="addKey('phonevalidator')">
+              <span class="btn-icon">➕</span> Add Key
+            </button>
           </div>
+
+          <div id="pvKeysList"></div>
         </div>
 
+        <!-- Cost Estimator -->
         <div class="setting-group">
           <h4 class="setting-title">💰 Cost Estimator</h4>
           <p class="setting-desc">Estimate your verification costs based on active provider.</p>
@@ -259,10 +283,6 @@
           </div>
           <div id="costResult" style="font-size: 14px; color: var(--text-secondary);"></div>
         </div>
-
-        <button class="btn btn-primary" onclick="saveSettings()">
-          <span class="btn-icon">💾</span> Save Settings
-        </button>
       </div>
     </section>
 

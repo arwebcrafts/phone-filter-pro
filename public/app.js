@@ -17,37 +17,26 @@ document.addEventListener('DOMContentLoaded', () => {
   loadHistory();
   setupDragAndDrop();
   setupFileInput();
-  calculateCost();
 });
 
 // ========== NAVIGATION ==========
 function switchPage(pageName) {
-  // Hide all pages
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
-  // Show target page
   const target = document.getElementById(`page-${pageName}`);
   if (target) target.classList.add('active');
-
-  // Update nav tabs
   document.querySelectorAll('.nav-tab').forEach(tab => {
     tab.classList.toggle('active', tab.dataset.page === pageName);
   });
-
-  // Special handling for pages
   if (pageName === 'history') loadHistory();
+  if (pageName === 'settings') loadConfig();
 }
 
 // ========== FILE UPLOAD ==========
 function setupDragAndDrop() {
   const zone = document.getElementById('uploadZone');
-  
   ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(evt => {
-    zone.addEventListener(evt, e => {
-      e.preventDefault();
-      e.stopPropagation();
-    });
+    zone.addEventListener(evt, e => { e.preventDefault(); e.stopPropagation(); });
   });
-
   zone.addEventListener('dragenter', () => zone.classList.add('drag-over'));
   zone.addEventListener('dragover', () => zone.classList.add('drag-over'));
   zone.addEventListener('dragleave', () => zone.classList.remove('drag-over'));
@@ -68,13 +57,10 @@ function setupFileInput() {
 async function uploadFile(file) {
   const zone = document.getElementById('uploadZone');
   const ext = file.name.split('.').pop().toLowerCase();
-  
   if (!['csv', 'xlsx', 'xls'].includes(ext)) {
     showToast('Unsupported file format. Please upload CSV, XLSX, or XLS.', 'error');
     return;
   }
-
-  // Show loading state
   zone.querySelector('.upload-title').textContent = 'Uploading...';
   zone.querySelector('.upload-icon').textContent = '⏳';
 
@@ -82,22 +68,13 @@ async function uploadFile(file) {
   formData.append('file', file);
 
   try {
-    const response = await fetch(`${API_BASE}/api/upload`, {
-      method: 'POST',
-      body: formData
-    });
-
+    const response = await fetch(`${API_BASE}/api/upload`, { method: 'POST', body: formData });
     const result = await response.json();
-
-    if (!response.ok) {
-      throw new Error(result.error || 'Upload failed');
-    }
-
+    if (!response.ok) throw new Error(result.error || 'Upload failed');
     currentUpload = result;
     showFilePreview(result);
     showToast(`File uploaded! ${result.rowCount.toLocaleString()} rows detected.`, 'success');
     addLog(`📄 File "${result.originalName}" uploaded — ${result.rowCount} rows, ${result.headers.length} columns`);
-
   } catch (error) {
     showToast(`Upload failed: ${error.message}`, 'error');
     resetUploadZone();
@@ -107,29 +84,14 @@ async function uploadFile(file) {
 function showFilePreview(data) {
   document.getElementById('filePreview').style.display = 'block';
   document.getElementById('uploadZone').style.display = 'none';
-
-  // Stats
   const statsHtml = `
-    <div class="stat-item">
-      <div class="stat-value">${data.rowCount.toLocaleString()}</div>
-      <div class="stat-label">Total Rows</div>
-    </div>
-    <div class="stat-item">
-      <div class="stat-value">${data.headers.length}</div>
-      <div class="stat-label">Columns</div>
-    </div>
-    <div class="stat-item">
-      <div class="stat-value">${data.detectedPhoneCols.length}</div>
-      <div class="stat-label">Phone Columns</div>
-    </div>
-    <div class="stat-item">
-      <div class="stat-value">${data.originalName.split('.').pop().toUpperCase()}</div>
-      <div class="stat-label">File Type</div>
-    </div>
+    <div class="stat-item"><div class="stat-value">${data.rowCount.toLocaleString()}</div><div class="stat-label">Total Rows</div></div>
+    <div class="stat-item"><div class="stat-value">${data.headers.length}</div><div class="stat-label">Columns</div></div>
+    <div class="stat-item"><div class="stat-value">${data.detectedPhoneCols.length}</div><div class="stat-label">Phone Columns</div></div>
+    <div class="stat-item"><div class="stat-value">${data.originalName.split('.').pop().toUpperCase()}</div><div class="stat-label">File Type</div></div>
   `;
   document.getElementById('fileStats').innerHTML = statsHtml;
 
-  // Preview table
   if (data.sampleData.length > 0) {
     let tableHtml = '<table class="data-table"><thead><tr>';
     data.headers.forEach(h => {
@@ -137,20 +99,15 @@ function showFilePreview(data) {
       tableHtml += `<th style="${isPhone ? 'color: var(--accent-success);' : ''}">${escapeHtml(h)} ${isPhone ? '📞' : ''}</th>`;
     });
     tableHtml += '</tr></thead><tbody>';
-    
     data.sampleData.forEach(row => {
       tableHtml += '<tr>';
-      data.headers.forEach(h => {
-        tableHtml += `<td>${escapeHtml(String(row[h] || ''))}</td>`;
-      });
+      data.headers.forEach(h => { tableHtml += `<td>${escapeHtml(String(row[h] || ''))}</td>`; });
       tableHtml += '</tr>';
     });
-    
     tableHtml += '</tbody></table>';
     document.getElementById('previewTable').innerHTML = tableHtml;
   }
 
-  // Column chips
   selectedPhoneColumns = new Set(data.detectedPhoneCols);
   renderColumnChips(data.headers, data.detectedPhoneCols);
   updateSelectedCount();
@@ -186,11 +143,8 @@ function updateSelectedCount() {
   const count = selectedPhoneColumns.size;
   const btn = document.getElementById('startVerifyBtn');
   const countEl = document.getElementById('selectedCount');
-  
   btn.disabled = count === 0;
-  countEl.textContent = count === 0
-    ? 'No columns selected'
-    : `${count} column${count > 1 ? 's' : ''} selected`;
+  countEl.textContent = count === 0 ? 'No columns selected' : `${count} column${count > 1 ? 's' : ''} selected`;
 }
 
 function resetUpload() {
@@ -211,28 +165,18 @@ function resetUploadZone() {
 // ========== VERIFICATION ==========
 async function startVerification() {
   if (!currentUpload || selectedPhoneColumns.size === 0) return;
-
-  // Check API key
   const configResponse = await fetch(`${API_BASE}/api/config`);
   const config = await configResponse.json();
-  
   if (!config.hasApiKey) {
     showToast('Please add your API key in Settings first!', 'error');
     switchPage('settings');
     return;
   }
-
   const countryCode = document.getElementById('countryCode').value.trim();
-
-  // Switch to verify page
   switchPage('verify');
-  
-  // Show progress panel, hide others
   document.getElementById('progressPanel').classList.add('active');
   document.getElementById('resultsPanel').classList.remove('active');
   document.getElementById('verifyEmpty').style.display = 'none';
-
-  // Reset progress
   updateProgress({ percent: 0, processed: 0, totalRows: currentUpload.rowCount, stats: {} });
   clearLogs();
   addLog(`🚀 Starting verification of ${currentUpload.rowCount} records...`, 'info');
@@ -243,25 +187,13 @@ async function startVerification() {
     const response = await fetch(`${API_BASE}/api/verify`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        uploadId: currentUpload.uploadId,
-        phoneColumns: [...selectedPhoneColumns],
-        countryCode
-      })
+      body: JSON.stringify({ uploadId: currentUpload.uploadId, phoneColumns: [...selectedPhoneColumns], countryCode })
     });
-
     const result = await response.json();
-
-    if (!response.ok) {
-      throw new Error(result.error || 'Verification failed to start');
-    }
-
+    if (!response.ok) throw new Error(result.error || 'Verification failed to start');
     currentJobId = result.jobId;
     addLog(`✅ Job started: ${result.jobId}`, 'success');
-
-    // Connect to SSE for progress updates
     connectSSE(result.jobId);
-
   } catch (error) {
     showToast(`Failed to start: ${error.message}`, 'error');
     addLog(`❌ Error: ${error.message}`, 'error');
@@ -270,24 +202,19 @@ async function startVerification() {
 
 function connectSSE(jobId) {
   if (eventSource) eventSource.close();
-  
   eventSource = new EventSource(`${API_BASE}/api/progress/${jobId}`);
-  
   eventSource.onmessage = (event) => {
     const data = JSON.parse(event.data);
-    
     switch (data.type) {
       case 'start':
         addLog(`📡 Connected — processing ${data.totalRows} records...`, 'info');
         break;
-      
       case 'progress':
         updateProgress(data);
         if (data.processed % 50 === 0 || data.processed === data.totalRows) {
           addLog(`📊 ${data.processed}/${data.totalRows} processed (${data.percent}%)`, 'info');
         }
         break;
-      
       case 'complete':
         updateProgress(data);
         showResults(data);
@@ -296,7 +223,6 @@ function connectSSE(jobId) {
         eventSource.close();
         eventSource = null;
         break;
-      
       case 'error':
         addLog(`❌ Error: ${data.message}`, 'error');
         showToast(`Error: ${data.message}`, 'error');
@@ -305,7 +231,6 @@ function connectSSE(jobId) {
         break;
     }
   };
-
   eventSource.onerror = () => {
     addLog('⚠️ Connection lost. Results may still be processing...', 'error');
   };
@@ -313,12 +238,10 @@ function connectSSE(jobId) {
 
 function updateProgress(data) {
   const { percent = 0, processed = 0, totalRows = 0, stats = {} } = data;
-  
   document.getElementById('progressBar').style.width = `${percent}%`;
   document.getElementById('progressPercent').textContent = `${percent}%`;
   document.getElementById('progressCount').textContent = `${processed.toLocaleString()} / ${totalRows.toLocaleString()}`;
   document.getElementById('progressMessage').textContent = data.message || 'Processing...';
-  
   document.getElementById('statMobile').textContent = stats.mobile || 0;
   document.getElementById('statLandline').textContent = stats.landline || 0;
   document.getElementById('statVoip').textContent = (stats.voip || 0) + (stats.fixed_voip || 0);
@@ -328,15 +251,10 @@ function updateProgress(data) {
 
 function showResults(data) {
   const { stats = {}, outputFiles = {}, autoSavePath, totalRows } = data;
-  
-  // Hide progress, show results
   document.getElementById('progressPanel').classList.remove('active');
   document.getElementById('resultsPanel').classList.add('active');
-  
-  document.getElementById('resultsSubtitle').textContent = 
-    `Successfully processed ${totalRows.toLocaleString()} records. Here's the breakdown:`;
+  document.getElementById('resultsSubtitle').textContent = `Successfully processed ${totalRows.toLocaleString()} records. Here's the breakdown:`;
 
-  // Summary cards
   const total = totalRows;
   const summaryData = [
     { icon: '📱', label: 'Mobile', value: stats.mobile || 0, class: 'mobile' },
@@ -355,7 +273,6 @@ function showResults(data) {
     </div>
   `).join('');
 
-  // Filtered download buttons
   const downloadConfigs = [
     { key: 'MOBILE', icon: '📱', label: 'Mobile Only', btnClass: 'btn-primary' },
     { key: 'LANDLINE', icon: '☎️', label: 'Landline Only', btnClass: 'btn-ghost' },
@@ -372,29 +289,26 @@ function showResults(data) {
       const isPrimary = dc.key === 'MOBILE';
       const sizeClass = isPrimary ? 'btn-lg' : '';
       downloadHtml += `
-        <a href="${API_BASE}/api/download/${fileInfo.fileName}" class="btn ${dc.btnClass} ${sizeClass}" download>
+        <a href="${API_BASE}/api/download/${encodeURIComponent(fileInfo.fileName)}" class="btn ${dc.btnClass} ${sizeClass}" download>
           <span class="btn-icon">${dc.icon}</span> ${dc.label} (${fileInfo.count.toLocaleString()})
         </a>
       `;
     }
   }
-
   downloadHtml += `
     <button class="btn btn-ghost" onclick="switchPage('upload'); resetUpload();" style="margin-left: auto;">
       <span class="btn-icon">📤</span> Upload Another File
     </button>
   `;
-
   document.getElementById('downloadActions').innerHTML = downloadHtml;
 
-  // Auto-save banner
   if (autoSavePath) {
     document.getElementById('saveBanner').style.display = 'flex';
     document.getElementById('savePath').textContent = autoSavePath;
   }
 }
 
-// ========== SETTINGS ==========
+// ========== SETTINGS & KEY POOL ==========
 async function loadConfig() {
   try {
     const response = await fetch(`${API_BASE}/api/config`);
@@ -404,38 +318,34 @@ async function loadConfig() {
       document.getElementById('settingProvider').value = config.apiProvider;
     }
 
-    const badgeVeriphone = document.getElementById('badgeVeriphoneKey');
-    const badgePhonevalidator = document.getElementById('badgePhonevalidatorKey');
+    // Render key pools
+    renderVeriphoneKeys(config.veriphoneKeys || []);
+    renderPvKeys(config.phonevalidatorKeys || []);
 
-    if (config.hasVeriphoneKey) {
-      document.getElementById('settingVeriphoneKey').value = config.veriphoneKeyMasked;
-      if (badgeVeriphone) {
-        badgeVeriphone.textContent = 'Configured ✅';
-        badgeVeriphone.style.background = 'rgba(16,185,129,0.15)';
-        badgeVeriphone.style.color = '#10B981';
-      }
-    } else {
-      document.getElementById('settingVeriphoneKey').value = '';
-      if (badgeVeriphone) {
-        badgeVeriphone.textContent = 'Not Set ⚠️';
-        badgeVeriphone.style.background = 'rgba(239,68,68,0.15)';
-        badgeVeriphone.style.color = '#EF4444';
-      }
-    }
-
-    if (config.hasPhonevalidatorKey) {
-      document.getElementById('settingPhonevalidatorKey').value = config.phonevalidatorKeyMasked;
-      if (badgePhonevalidator) {
-        badgePhonevalidator.textContent = 'Configured ✅';
-        badgePhonevalidator.style.background = 'rgba(16,185,129,0.15)';
-        badgePhonevalidator.style.color = '#10B981';
-      }
-    } else {
-      document.getElementById('settingPhonevalidatorKey').value = '';
-      if (badgePhonevalidator) {
-        badgePhonevalidator.textContent = 'Not Set ⚠️';
-        badgePhonevalidator.style.background = 'rgba(239,68,68,0.15)';
-        badgePhonevalidator.style.color = '#EF4444';
+    // Pool summary
+    const totalCredits = config.totalVeriphoneCredits || 0;
+    const numKeys = (config.veriphoneKeys || []).length;
+    const summaryEl = document.getElementById('veriphonePoolSummary');
+    if (summaryEl) {
+      if (numKeys > 0) {
+        summaryEl.innerHTML = `
+          <div style="padding: 12px 16px; background: var(--bg-surface); border-radius: var(--radius-md); border: 1px solid var(--border-subtle); display: flex; gap: 24px; flex-wrap: wrap;">
+            <div>
+              <div style="font-size: 24px; font-weight: 800; background: var(--gradient-primary); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">${totalCredits.toLocaleString()}</div>
+              <div style="font-size: 11px; color: var(--text-muted);">Total Credits</div>
+            </div>
+            <div>
+              <div style="font-size: 24px; font-weight: 800; color: var(--text-primary);">${numKeys}</div>
+              <div style="font-size: 11px; color: var(--text-muted);">API Keys</div>
+            </div>
+            <div>
+              <div style="font-size: 24px; font-weight: 800; color: var(--text-primary);">${totalCredits.toLocaleString()}</div>
+              <div style="font-size: 11px; color: var(--text-muted);">Leads You Can Verify</div>
+            </div>
+          </div>
+        `;
+      } else {
+        summaryEl.innerHTML = '<p style="font-size: 13px; color: var(--text-muted);">No keys added yet. Add your first Veriphone key above.</p>';
       }
     }
 
@@ -455,131 +365,168 @@ async function loadConfig() {
   }
 }
 
-function onProviderChange() {
-  calculateCost();
+function renderVeriphoneKeys(keys) {
+  const container = document.getElementById('veriphoneKeysList');
+  if (!container) return;
+  if (keys.length === 0) { container.innerHTML = ''; return; }
+  container.innerHTML = keys.map((k, i) => {
+    const creditColor = k.credits > 0 ? '#10B981' : (k.credits === 0 ? '#EF4444' : '#6B7280');
+    const creditBg = k.credits > 0 ? 'rgba(16,185,129,0.15)' : (k.credits === 0 ? 'rgba(239,68,68,0.15)' : 'rgba(107,114,128,0.15)');
+    const creditText = k.credits !== null && k.credits !== undefined ? `${k.credits.toLocaleString()} credits` : 'Credits unknown';
+    const checkedText = k.lastChecked ? `Checked ${new Date(k.lastChecked).toLocaleTimeString()}` : '';
+    return `
+      <div style="display: flex; align-items: center; gap: 8px; padding: 8px 12px; background: var(--bg-surface); border-radius: var(--radius-sm); border: 1px solid var(--border-subtle); margin-bottom: 6px; flex-wrap: wrap;">
+        <span style="font-weight: 600; font-size: 13px; min-width: 80px;">${escapeHtml(k.label)}</span>
+        <code style="font-size: 12px; color: var(--text-muted); flex: 1;">${escapeHtml(k.keyMasked)}</code>
+        <span class="format-badge" style="background: ${creditBg}; color: ${creditColor}; font-size: 11px; white-space: nowrap;">${creditText}</span>
+        ${checkedText ? `<span style="font-size: 10px; color: var(--text-muted);">${checkedText}</span>` : ''}
+        <button class="btn btn-ghost btn-sm" onclick="removeKey('veriphone', ${i})" style="color: #EF4444; padding: 2px 8px;">✕</button>
+      </div>
+    `;
+  }).join('');
 }
 
+function renderPvKeys(keys) {
+  const container = document.getElementById('pvKeysList');
+  if (!container) return;
+  if (keys.length === 0) { container.innerHTML = ''; return; }
+  container.innerHTML = keys.map((k, i) => `
+    <div style="display: flex; align-items: center; gap: 8px; padding: 8px 12px; background: var(--bg-surface); border-radius: var(--radius-sm); border: 1px solid var(--border-subtle); margin-bottom: 6px;">
+      <span style="font-weight: 600; font-size: 13px; min-width: 80px;">${escapeHtml(k.label)}</span>
+      <code style="font-size: 12px; color: var(--text-muted); flex: 1;">${escapeHtml(k.keyMasked)}</code>
+      <span class="format-badge" style="background: rgba(16,185,129,0.15); color: #10B981; font-size: 11px;">Active</span>
+      <button class="btn btn-ghost btn-sm" onclick="removeKey('phonevalidator', ${i})" style="color: #EF4444; padding: 2px 8px;">✕</button>
+    </div>
+  `).join('');
+}
+
+async function addKey(provider) {
+  let key, label;
+  if (provider === 'veriphone') {
+    key = document.getElementById('newVeriphoneKey').value.trim();
+    label = document.getElementById('newVeriphoneLabel').value.trim() || `Key ${Date.now()}`;
+  } else {
+    key = document.getElementById('newPvKey').value.trim();
+    label = document.getElementById('newPvLabel').value.trim() || `Key ${Date.now()}`;
+  }
+  if (!key) { showToast('Please paste an API key first!', 'error'); return; }
+
+  try {
+    const response = await fetch(`${API_BASE}/api/keys/add`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ provider, key, label })
+    });
+    const result = await response.json();
+    if (result.success) {
+      showToast(result.message, 'success');
+      if (provider === 'veriphone') {
+        document.getElementById('newVeriphoneKey').value = '';
+        document.getElementById('newVeriphoneLabel').value = '';
+      } else {
+        document.getElementById('newPvKey').value = '';
+        document.getElementById('newPvLabel').value = '';
+      }
+      loadConfig();
+    } else {
+      showToast(result.error || 'Failed to add key', 'error');
+    }
+  } catch (error) {
+    showToast(`Failed: ${error.message}`, 'error');
+  }
+}
+
+async function removeKey(provider, index) {
+  if (!confirm('Remove this API key?')) return;
+  try {
+    const response = await fetch(`${API_BASE}/api/keys/remove`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ provider, index })
+    });
+    const result = await response.json();
+    if (result.success) { showToast('Key removed', 'success'); loadConfig(); }
+    else { showToast(result.error || 'Failed to remove key', 'error'); }
+  } catch (error) { showToast(`Failed: ${error.message}`, 'error'); }
+}
+
+async function checkAllCredits() {
+  showToast('Checking credits for all keys...', 'info');
+  try {
+    const response = await fetch(`${API_BASE}/api/keys/check-credits`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' }
+    });
+    const result = await response.json();
+    if (result.success) { showToast(result.message, 'success'); loadConfig(); }
+    else { showToast('Failed to check credits', 'error'); }
+  } catch (error) { showToast(`Failed: ${error.message}`, 'error'); }
+}
+
+function onProviderChange() { calculateCost(); }
+
 async function saveSettings() {
-  const veriphoneKey = document.getElementById('settingVeriphoneKey').value.trim();
-  const phonevalidatorKey = document.getElementById('settingPhonevalidatorKey').value.trim();
   const apiProvider = document.getElementById('settingProvider').value;
-
-  const body = { apiProvider };
-  if (veriphoneKey && !veriphoneKey.includes('*')) {
-    body.veriphoneApiKey = veriphoneKey;
-  }
-  if (phonevalidatorKey && !phonevalidatorKey.includes('*')) {
-    body.phonevalidatorApiKey = phonevalidatorKey;
-  }
-
   try {
     const response = await fetch(`${API_BASE}/api/config`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body)
+      body: JSON.stringify({ apiProvider })
     });
-
-    if (!response.ok) {
-      throw new Error(`Server error ${response.status}`);
-    }
-
+    if (!response.ok) throw new Error(`Server error ${response.status}`);
     const result = await response.json();
-    
-    if (result.success) {
-      showToast(result.message || 'Settings saved successfully!', 'success');
-      loadConfig(); // Refresh display
-    } else {
-      showToast(result.error || 'Failed to save settings', 'error');
-    }
-  } catch (error) {
-    showToast(`Failed to save: ${error.message}. Make sure the server is running.`, 'error');
-  }
+    if (result.success) { showToast(result.message || 'Provider saved!', 'success'); loadConfig(); }
+    else { showToast(result.error || 'Failed to save', 'error'); }
+  } catch (error) { showToast(`Failed to save: ${error.message}`, 'error'); }
 }
 
 function calculateCost() {
   const leads = parseInt(document.getElementById('costLeads').value) || 0;
   const provider = document.getElementById('settingProvider').value;
 
-  // Veriphone uses credit packs — find the best-fit pack
   if (provider === 'veriphone') {
     const packs = [
-      { credits: 10000, price: 24, perK: 2.40 },
-      { credits: 25000, price: 49, perK: 1.96 },
-      { credits: 50000, price: 79, perK: 1.58 },
-      { credits: 100000, price: 119, perK: 1.19 },
-      { credits: 250000, price: 199, perK: 0.80 },
-      { credits: 500000, price: 299, perK: 0.60 },
-      { credits: 1000000, price: 399, perK: 0.40 },
-      { credits: 2500000, price: 699, perK: 0.28 },
-      { credits: 5000000, price: 999, perK: 0.20 }
+      { credits: 10000, price: 24 }, { credits: 25000, price: 49 },
+      { credits: 50000, price: 79 }, { credits: 100000, price: 119 },
+      { credits: 250000, price: 199 }, { credits: 500000, price: 299 },
+      { credits: 1000000, price: 399 }, { credits: 2500000, price: 699 },
+      { credits: 5000000, price: 999 }
     ];
-
-    // Find cheapest combination of packs
-    let bestPack = packs[0];
     let totalCost = 0;
     let packDesc = '';
-
-    // Find smallest single pack that covers the leads
     const singlePack = packs.find(p => p.credits >= leads);
     if (singlePack) {
-      bestPack = singlePack;
       totalCost = singlePack.price;
-      packDesc = `${singlePack.credits.toLocaleString()} credit pack (${(singlePack.credits - leads).toLocaleString()} credits leftover)`;
+      packDesc = `${singlePack.credits.toLocaleString()} credit pack (${(singlePack.credits - leads).toLocaleString()} leftover)`;
     } else {
-      // Need multiple packs — use largest packs first
-      let remaining = leads;
-      let parts = [];
+      let remaining = leads; let parts = [];
       for (let i = packs.length - 1; i >= 0 && remaining > 0; i--) {
         const count = Math.floor(remaining / packs[i].credits);
-        if (count > 0) {
-          totalCost += count * packs[i].price;
-          remaining -= count * packs[i].credits;
-          parts.push(`${count}× ${packs[i].credits.toLocaleString()}`);
-        }
+        if (count > 0) { totalCost += count * packs[i].price; remaining -= count * packs[i].credits; parts.push(`${count}× ${packs[i].credits.toLocaleString()}`); }
       }
-      if (remaining > 0) {
-        const coverPack = packs.find(p => p.credits >= remaining) || packs[0];
-        totalCost += coverPack.price;
-        parts.push(`1× ${coverPack.credits.toLocaleString()}`);
-      }
+      if (remaining > 0) { const cp = packs.find(p => p.credits >= remaining) || packs[0]; totalCost += cp.price; parts.push(`1× ${cp.credits.toLocaleString()}`); }
       packDesc = parts.join(' + ');
     }
-
     document.getElementById('costResult').innerHTML = `
       <div style="padding: 16px; background: var(--bg-surface); border-radius: var(--radius-md); border: 1px solid var(--border-subtle);">
         <div style="font-size: 28px; font-weight: 800; background: var(--gradient-primary); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">$${totalCost}</div>
-        <div style="font-size: 12px; color: var(--text-muted); margin-top: 4px;">
-          ${leads.toLocaleString()} leads via Veriphone (Standard Validation)
-        </div>
-        <div style="font-size: 12px; color: var(--text-secondary); margin-top: 2px;">
-          💡 Best pack: ${packDesc}
-        </div>
-        <div style="font-size: 11px; color: var(--text-muted); margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border-subtle);">
-          ⚠️ Current Carrier Lookup uses 10 credits per lookup → cost would be ~$${(totalCost * 10)} for ${leads.toLocaleString()} leads
-        </div>
+        <div style="font-size: 12px; color: var(--text-muted); margin-top: 4px;">${leads.toLocaleString()} leads via Veriphone</div>
+        <div style="font-size: 12px; color: var(--text-secondary); margin-top: 2px;">💡 Best pack: ${packDesc}</div>
+        <div style="font-size: 11px; color: var(--accent-primary); margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border-subtle);">💡 Or use ${Math.ceil(leads / 1000)} free Gmail accounts (1000 credits each) = <strong>$0 FREE</strong></div>
       </div>
     `;
     return;
   }
 
-  // Other providers — flat rate
   const rates = {
-    phonevalidator: { rate: 0.004, name: 'PhoneValidator.com (Includes Ported Carrier Detection)' },
-    telnyx: { rate: 0.004, name: 'Telnyx' },
-    twilio: { rate: 0.008, name: 'Twilio' },
-    numverify: { rate: 0.003, name: 'NumVerify' },
-    abstractapi: { rate: 0.002, name: 'AbstractAPI' }
+    phonevalidator: { rate: 0.004, name: 'PhoneValidator.com (Includes Ported Carrier Detection)' }
   };
-
   const info = rates[provider] || { rate: 0.004, name: provider };
   const cost = (leads * info.rate).toFixed(2);
-  
   document.getElementById('costResult').innerHTML = `
     <div style="padding: 16px; background: var(--bg-surface); border-radius: var(--radius-md); border: 1px solid var(--border-subtle);">
       <div style="font-size: 28px; font-weight: 800; background: var(--gradient-primary); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">$${cost}</div>
-      <div style="font-size: 12px; color: var(--text-muted); margin-top: 4px;">
-        ${leads.toLocaleString()} leads × $${info.rate}/lookup via ${info.name}
-      </div>
+      <div style="font-size: 12px; color: var(--text-muted); margin-top: 4px;">${leads.toLocaleString()} leads × $${info.rate}/lookup via ${info.name}</div>
     </div>
   `;
 }
@@ -595,12 +542,7 @@ async function loadHistory() {
       list.innerHTML = data.jobs.map(job => {
         const stats = job.stats || {};
         const files = job.outputFiles || {};
-        
-        let pName = job.apiProvider;
-        if (!pName) {
-          if (stats && stats.mobile === 118) pName = 'phonevalidator';
-          else pName = 'veriphone';
-        }
+        let pName = job.apiProvider || 'veriphone';
         const providerName = pName === 'phonevalidator' ? 'PhoneValidator.com' : 'Veriphone.io';
         const providerBadgeColor = pName === 'phonevalidator' ? '#3B82F6' : '#8B5CF6';
         const providerBadgeBg = pName === 'phonevalidator' ? 'rgba(59,130,246,0.15)' : 'rgba(139,92,246,0.15)';
@@ -632,57 +574,31 @@ async function loadHistory() {
               <div>
                 <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
                   <h3 class="card-title" style="font-size: 16px; font-weight: 700;">📄 ${escapeHtml(job.originalName)}</h3>
-                  <span class="format-badge" style="background: ${providerBadgeBg}; color: ${providerBadgeColor}; font-size: 11px; font-weight: 600;">⚡ Provider: ${providerName}</span>
+                  <span class="format-badge" style="background: ${providerBadgeBg}; color: ${providerBadgeColor}; font-size: 11px; font-weight: 600;">⚡ ${providerName}</span>
                 </div>
                 <span style="font-size: 12px; color: var(--text-muted);">${formatDate(job.timestamp)} • ${job.totalRows.toLocaleString()} total rows</span>
               </div>
             </div>
-            
             <div style="display: flex; gap: 12px; flex-wrap: wrap; margin: 12px 0;">
               <span class="format-badge" style="background: rgba(16,185,129,0.15); color: #10B981;">📱 Mobile: ${stats.mobile || 0}</span>
               <span class="format-badge" style="background: rgba(59,130,246,0.15); color: #3B82F6;">☎️ Landline: ${stats.landline || 0}</span>
               <span class="format-badge" style="background: rgba(139,92,246,0.15); color: #8B5CF6;">🌐 VoIP: ${stats.voip || 0}</span>
               <span class="format-badge" style="background: rgba(239,68,68,0.15); color: #EF4444;">❌ Invalid: ${stats.invalid || 0}</span>
             </div>
-
-            <div style="display: flex; flex-wrap: wrap; margin-top: 10px;">
-              ${buttonsHtml}
-            </div>
+            <div style="display: flex; flex-wrap: wrap; margin-top: 10px;">${buttonsHtml}</div>
           </div>
         `;
       }).join('');
       return;
     }
 
-    // Fallback: list output files if no job metadata exists
-    const filesRes = await fetch(`${API_BASE}/api/outputs`);
-    const filesData = await filesRes.json();
-    
-    if (!filesData.files || filesData.files.length === 0) {
-      list.innerHTML = `
-        <div class="empty-state">
-          <div class="empty-state-icon">📁</div>
-          <h3 class="empty-state-title">No files yet</h3>
-          <p class="empty-state-desc">Verified files will appear here after processing.</p>
-        </div>
-      `;
-      return;
-    }
-
-    list.innerHTML = filesData.files.map(f => `
-      <div class="history-item">
-        <div class="history-info">
-          <span class="history-icon">📄</span>
-          <div>
-            <div class="history-name">${escapeHtml(f.name)}</div>
-            <div class="history-meta">${formatFileSize(f.size)} • ${formatDate(f.created)}</div>
-          </div>
-        </div>
-        <a href="${API_BASE}/api/download/${encodeURIComponent(f.name)}" class="btn btn-ghost btn-sm" download>
-          <span class="btn-icon">📥</span> Download
-        </a>
+    list.innerHTML = `
+      <div class="empty-state">
+        <div class="empty-state-icon">📁</div>
+        <h3 class="empty-state-title">No files yet</h3>
+        <p class="empty-state-desc">Verified files will appear here after processing.</p>
       </div>
-    `).join('');
+    `;
   } catch (error) {
     console.error('Failed to load history:', error);
   }
@@ -711,10 +627,7 @@ function showToast(message, type = 'info') {
   toast.className = `toast ${type}`;
   toast.innerHTML = `<span>${icons[type] || 'ℹ️'}</span> ${escapeHtml(message)}`;
   container.appendChild(toast);
-  
-  setTimeout(() => {
-    if (toast.parentNode) toast.remove();
-  }, 5000);
+  setTimeout(() => { if (toast.parentNode) toast.remove(); }, 5000);
 }
 
 // ========== UTILITIES ==========
@@ -736,10 +649,6 @@ function formatFileSize(bytes) {
 
 function formatDate(dateStr) {
   return new Date(dateStr).toLocaleDateString('en-US', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit'
+    year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
   });
 }

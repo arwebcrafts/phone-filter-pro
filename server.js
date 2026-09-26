@@ -44,14 +44,19 @@ const upload = multer({
 
 // Memory stores for Vercel serverless deployment
 const uploadStore = new Map();
-const jobResultsStore = new Map();
+const jobResultsStore = new Map();      // jobId -> { outputFiles: { MOBILE: Buffer, ... } }
+const downloadStore = new Map();         // fileName -> { buffer, mimeType }
 
-// In-memory config store supporting separate provider keys
+// ========== MULTI-KEY POOL CONFIG ==========
+// config.veriphoneKeys = [ { key: '...', label: 'Gmail 1', credits: 1000 }, ... ]
+// config.phonevalidatorKeys = [ { key: '...', label: 'Account 1', credits: null }, ... ]
 let config = {
   apiProvider: process.env.API_PROVIDER || 'veriphone',
   veriphoneApiKey: process.env.VERIPHONE_API_KEY || process.env.API_KEY || '',
   phonevalidatorApiKey: process.env.PHONEVALIDATOR_API_KEY || '',
-  apiKey: process.env.API_KEY || ''
+  apiKey: process.env.API_KEY || '',
+  veriphoneKeys: [],      // Array of { key, label, credits, lastChecked }
+  phonevalidatorKeys: []  // Array of { key, label }
 };
 
 // Load config from file if exists
@@ -60,17 +65,56 @@ if (fs.existsSync(CONFIG_FILE)) {
   try {
     const loaded = JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8'));
     config = { ...config, ...loaded };
+    // Ensure arrays exist
+    if (!Array.isArray(config.veriphoneKeys)) config.veriphoneKeys = [];
+    if (!Array.isArray(config.phonevalidatorKeys)) config.phonevalidatorKeys = [];
   } catch (e) {
     console.log('Could not load config, using defaults');
   }
 }
 
+// Migrate legacy single key to pool if pool is empty
+function migrateLegacyKeys() {
+  if (config.veriphoneApiKey && config.veriphoneKeys.length === 0) {
+    config.veriphoneKeys.push({ key: config.veriphoneApiKey, label: 'Default Key', credits: null, lastChecked: null });
+  }
+  if (config.phonevalidatorApiKey && config.phonevalidatorKeys.length === 0) {
+    config.phonevalidatorKeys.push({ key: config.phonevalidatorApiKey, label: 'Default Key' });
+  }
+}
+migrateLegacyKeys();
+
+// Get best available key (one with most credits for Veriphone)
 function getActiveApiKey(provider) {
   const p = provider || config.apiProvider;
   if (p === 'phonevalidator') {
+    const keys = config.phonevalidatorKeys || [];
+    if (keys.length > 0) return keys[0].key;
     return config.phonevalidatorApiKey || config.apiKey || '';
   }
+  // Veriphone: pick key with highest credits > 0
+  const keys = config.veriphoneKeys || [];
+  if (keys.length > 0) {
+    // Prefer keys with known credits > 0, then keys with unknown credits (null)
+    const withCredits = keys.filter(k => k.credits > 0).sort((a, b) => b.credits - a.credits);
+    if (withCredits.length > 0) return withCredits[0].key;
+    const unknown = keys.filter(k => k.credits === null || k.credits === undefined);
+    if (unknown.length > 0) return unknown[0].key;
+    // All exhausted — return first anyway (API will error)
+    return keys[0].key;
+  }
   return config.veriphoneApiKey || config.apiKey || '';
+}
+
+// Get next key with credits for rotation during batch processing
+function getNextVeriphoneKey(exhaustedKey) {
+  const keys = config.veriphoneKeys || [];
+  // Mark exhausted key as 0 credits
+  const exhausted = keys.find(k => k.key === exhaustedKey);
+  if (exhausted) exhausted.credits = 0;
+  // Find next with credits
+  const available = keys.filter(k => k.credits === null || k.credits > 0);
+  return available.length > 0 ? available[0].key : null;
 }
 
 // Save config
@@ -87,45 +131,54 @@ const sseClients = new Map();
 
 // Config endpoints
 app.get('/api/config', (req, res) => {
-  const veriphoneKey = config.veriphoneApiKey || (config.apiProvider === 'veriphone' ? config.apiKey : '');
-  const phonevalidatorKey = config.phonevalidatorApiKey || (config.apiProvider === 'phonevalidator' ? config.apiKey : '');
-  const activeKey = getActiveApiKey(config.apiProvider);
-
   function maskKey(key) {
     if (!key) return '';
     return `${key.slice(0, 4)}${'*'.repeat(Math.max(0, key.length - 8))}${key.slice(-4)}`;
   }
 
+  const activeKey = getActiveApiKey(config.apiProvider);
+
+  // Mask keys in pool arrays
+  const maskedVeriphoneKeys = (config.veriphoneKeys || []).map((k, i) => ({
+    index: i,
+    label: k.label || `Key ${i + 1}`,
+    keyMasked: maskKey(k.key),
+    credits: k.credits,
+    lastChecked: k.lastChecked
+  }));
+
+  const maskedPhonevalidatorKeys = (config.phonevalidatorKeys || []).map((k, i) => ({
+    index: i,
+    label: k.label || `Key ${i + 1}`,
+    keyMasked: maskKey(k.key)
+  }));
+
   res.json({
     apiProvider: config.apiProvider,
     hasApiKey: !!activeKey,
     apiKeyMasked: maskKey(activeKey),
-    hasVeriphoneKey: !!veriphoneKey,
-    veriphoneKeyMasked: maskKey(veriphoneKey),
-    hasPhonevalidatorKey: !!phonevalidatorKey,
-    phonevalidatorKeyMasked: maskKey(phonevalidatorKey),
+    hasVeriphoneKey: config.veriphoneKeys.length > 0 || !!config.veriphoneApiKey,
+    hasPhonevalidatorKey: config.phonevalidatorKeys.length > 0 || !!config.phonevalidatorApiKey,
+    veriphoneKeys: maskedVeriphoneKeys,
+    phonevalidatorKeys: maskedPhonevalidatorKeys,
+    totalVeriphoneCredits: (config.veriphoneKeys || []).reduce((sum, k) => sum + (k.credits || 0), 0),
     isVercel: !!process.env.VERCEL
   });
 });
 
 app.post('/api/config', (req, res) => {
-  const { apiKey, apiProvider, veriphoneApiKey, phonevalidatorApiKey } = req.body;
+  const { apiProvider, veriphoneApiKey, phonevalidatorApiKey } = req.body;
   if (apiProvider !== undefined) config.apiProvider = apiProvider;
   
-  if (veriphoneApiKey !== undefined) config.veriphoneApiKey = veriphoneApiKey;
-  if (phonevalidatorApiKey !== undefined) config.phonevalidatorApiKey = phonevalidatorApiKey;
-
-  if (apiKey !== undefined && !apiKey.includes('*')) {
-    if (config.apiProvider === 'phonevalidator') {
-      config.phonevalidatorApiKey = apiKey;
-    } else {
-      config.veriphoneApiKey = apiKey;
-    }
-    config.apiKey = apiKey;
+  // Legacy single key support
+  if (veriphoneApiKey !== undefined && !veriphoneApiKey.includes('*')) {
+    config.veriphoneApiKey = veriphoneApiKey;
+  }
+  if (phonevalidatorApiKey !== undefined && !phonevalidatorApiKey.includes('*')) {
+    config.phonevalidatorApiKey = phonevalidatorApiKey;
   }
   
   saveConfig();
-
   const isVercel = !!process.env.VERCEL;
   res.json({ 
     success: true, 
@@ -134,6 +187,138 @@ app.post('/api/config', (req, res) => {
       : 'Configuration saved!'
   });
 });
+
+// ========== KEY POOL MANAGEMENT ==========
+
+// Add a new key to the pool
+app.post('/api/keys/add', async (req, res) => {
+  const { provider, key, label } = req.body;
+  if (!key || !key.trim()) {
+    return res.status(400).json({ error: 'API key is required' });
+  }
+
+  const trimmedKey = key.trim();
+  
+  if (provider === 'phonevalidator') {
+    // Check for duplicates
+    if (config.phonevalidatorKeys.some(k => k.key === trimmedKey)) {
+      return res.status(400).json({ error: 'This key already exists in your pool' });
+    }
+    config.phonevalidatorKeys.push({ key: trimmedKey, label: label || `PV Key ${config.phonevalidatorKeys.length + 1}` });
+    if (!config.phonevalidatorApiKey) config.phonevalidatorApiKey = trimmedKey;
+    saveConfig();
+    return res.json({ success: true, message: 'PhoneValidator key added!', totalKeys: config.phonevalidatorKeys.length });
+  }
+
+  // Veriphone — check for duplicates
+  if (config.veriphoneKeys.some(k => k.key === trimmedKey)) {
+    return res.status(400).json({ error: 'This key already exists in your pool' });
+  }
+
+  // Try to check credits immediately
+  let credits = null;
+  try {
+    credits = await checkVeriphoneCredits(trimmedKey);
+  } catch (e) {
+    // Key might still be valid, just can't check credits
+  }
+
+  config.veriphoneKeys.push({ 
+    key: trimmedKey, 
+    label: label || `Veriphone Key ${config.veriphoneKeys.length + 1}`, 
+    credits, 
+    lastChecked: new Date().toISOString() 
+  });
+  if (!config.veriphoneApiKey) config.veriphoneApiKey = trimmedKey;
+  saveConfig();
+
+  res.json({ 
+    success: true, 
+    message: `Veriphone key added! ${credits !== null ? credits + ' credits available' : 'Credits unknown'}`, 
+    credits,
+    totalKeys: config.veriphoneKeys.length
+  });
+});
+
+// Remove a key from the pool
+app.post('/api/keys/remove', (req, res) => {
+  const { provider, index } = req.body;
+  
+  if (provider === 'phonevalidator') {
+    if (index >= 0 && index < config.phonevalidatorKeys.length) {
+      config.phonevalidatorKeys.splice(index, 1);
+      saveConfig();
+      return res.json({ success: true, message: 'Key removed', totalKeys: config.phonevalidatorKeys.length });
+    }
+  } else {
+    if (index >= 0 && index < config.veriphoneKeys.length) {
+      config.veriphoneKeys.splice(index, 1);
+      saveConfig();
+      return res.json({ success: true, message: 'Key removed', totalKeys: config.veriphoneKeys.length });
+    }
+  }
+  res.status(400).json({ error: 'Invalid key index' });
+});
+
+// Check credits for all Veriphone keys
+app.post('/api/keys/check-credits', async (req, res) => {
+  const results = [];
+  for (const entry of config.veriphoneKeys) {
+    try {
+      const credits = await checkVeriphoneCredits(entry.key);
+      entry.credits = credits;
+      entry.lastChecked = new Date().toISOString();
+      results.push({ label: entry.label, credits, status: 'ok' });
+    } catch (e) {
+      results.push({ label: entry.label, credits: entry.credits, status: `error: ${e.message}` });
+    }
+  }
+  saveConfig();
+  
+  const totalCredits = config.veriphoneKeys.reduce((sum, k) => sum + (k.credits || 0), 0);
+  res.json({ 
+    success: true, 
+    results, 
+    totalCredits,
+    message: `Total pool: ${totalCredits.toLocaleString()} credits across ${config.veriphoneKeys.length} keys`
+  });
+});
+
+// Check Veriphone credits for a single key
+async function checkVeriphoneCredits(apiKey) {
+  try {
+    const url = `https://api.veriphone.io/v2/verify?phone=+14155552671&key=${apiKey}`;
+    const response = await fetch(url);
+    
+    // The response headers or body contain credit info
+    // Veriphone returns remaining_credits in response
+    if (!response.ok) {
+      throw new Error(`API returned ${response.status}`);
+    }
+    
+    const result = await response.json();
+    // Veriphone v2 returns remaining_credits in the response
+    if (result.remaining_credits !== undefined) {
+      return result.remaining_credits;
+    }
+    
+    // Fallback: try v3 credits endpoint
+    try {
+      const creditsUrl = `https://api.veriphone.io/v3/credits`;
+      const creditsRes = await fetch(creditsUrl, {
+        headers: { 'Authorization': `Bearer ${apiKey}`, 'Accept': 'application/json' }
+      });
+      if (creditsRes.ok) {
+        const creditsData = await creditsRes.json();
+        return creditsData.counter || creditsData.remaining_credits || null;
+      }
+    } catch (e) {}
+    
+    return null;
+  } catch (error) {
+    throw error;
+  }
+}
 
 // File upload and parsing
 app.post('/api/upload', upload.single('file'), (req, res) => {
@@ -276,10 +461,27 @@ async function verifyPhoneVeriphone(phone, apiKey) {
     
     if (!response.ok) {
       const errorText = await response.text();
+      // Check if it's a credits exhausted error
+      if (response.status === 402 || errorText.includes('credits') || errorText.includes('limit')) {
+        // Mark this key as exhausted and try next
+        const nextKey = getNextVeriphoneKey(apiKey);
+        if (nextKey) {
+          return verifyPhoneVeriphone(phone, nextKey);
+        }
+      }
       throw new Error(`API error ${response.status}: ${errorText}`);
     }
 
     const result = await response.json();
+    
+    // Update credits for this key if returned
+    if (result.remaining_credits !== undefined) {
+      const keyEntry = (config.veriphoneKeys || []).find(k => k.key === apiKey);
+      if (keyEntry) {
+        keyEntry.credits = result.remaining_credits;
+        keyEntry.lastChecked = new Date().toISOString();
+      }
+    }
     
     return {
       phone_valid: result.phone_valid || false,
@@ -500,6 +702,7 @@ async function processVerification(jobId, uploadInfo, phoneColumns, countryCode)
         // Format phone number with robust fallback
         const fullPhone = formatPhoneNumber(phoneValue, countryCode);
 
+        // Get current best key (auto-rotates when one runs out)
         const activeKey = getActiveApiKey(config.apiProvider);
         const result = await verifyPhone(fullPhone, activeKey, config.apiProvider);
         
@@ -593,16 +796,22 @@ async function processVerification(jobId, uploadInfo, phoneColumns, countryCode)
     const filePath = path.join(OUTPUT_DIR, fileName);
     let autoPath = '';
 
-    try {
-      const sheet = XLSX.utils.json_to_sheet(filteredData);
-      const wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, sheet, filterSet.label);
-      XLSX.writeFile(wb, filePath, { bookType: 'csv' });
+    // Generate CSV buffer in memory (works on both local and Vercel)
+    const sheet = XLSX.utils.json_to_sheet(filteredData);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, sheet, filterSet.label);
+    const csvBuffer = Buffer.from(XLSX.write(wb, { bookType: 'csv', type: 'buffer' }));
 
+    // Store in memory for Vercel downloads
+    downloadStore.set(fileName, { buffer: csvBuffer, mimeType: 'text/csv' });
+
+    // Also try to write to disk (works locally, fails silently on Vercel)
+    try {
+      fs.writeFileSync(filePath, csvBuffer);
       autoPath = path.join(__dirname, fileName);
       fs.copyFileSync(filePath, autoPath);
     } catch (e) {
-      console.log('File write skipped (read-only filesystem or Vercel serverless environment)');
+      // Read-only filesystem on Vercel — downloads will be served from memory
     }
 
     outputFiles[filterSet.suffix] = { fileName, count: filteredData.length, label: filterSet.label, autoSavePath: autoPath };
@@ -634,6 +843,9 @@ async function processVerification(jobId, uploadInfo, phoneColumns, countryCode)
     fs.writeFileSync(JOBS_FILE, JSON.stringify(jobsHistory, null, 2));
   } catch (e) {}
 
+  // Save config (updated credits after batch)
+  saveConfig();
+
   sendProgress(jobId, {
     type: 'complete',
     apiProvider: config.apiProvider,
@@ -651,16 +863,25 @@ async function processVerification(jobId, uploadInfo, phoneColumns, countryCode)
   });
 }
 
-// Download output file
+// Download output file — serves from memory first, then disk as fallback
 app.get('/api/download/:filename', (req, res) => {
   const { filename } = req.params;
-  const filePath = path.join(OUTPUT_DIR, filename);
   
-  if (!fs.existsSync(filePath)) {
-    return res.status(404).json({ error: 'File not found' });
+  // Try memory store first (works on Vercel)
+  const memFile = downloadStore.get(filename);
+  if (memFile) {
+    res.setHeader('Content-Type', memFile.mimeType);
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    return res.send(memFile.buffer);
   }
 
-  res.download(filePath, filename);
+  // Fallback to disk (works locally)
+  const filePath = path.join(OUTPUT_DIR, filename);
+  if (fs.existsSync(filePath)) {
+    return res.download(filePath, filename);
+  }
+
+  res.status(404).json({ error: 'File not found. The file may have expired from the session. Please re-run verification.' });
 });
 
 // Get batch job history
