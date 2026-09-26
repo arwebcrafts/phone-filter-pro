@@ -288,8 +288,24 @@ function showResults(data) {
     if (fileInfo && fileInfo.fileName && fileInfo.count > 0) {
       const isPrimary = dc.key === 'MOBILE';
       const sizeClass = isPrimary ? 'btn-lg' : '';
+      let downloadUrl = `${API_BASE}/api/download/${encodeURIComponent(fileInfo.fileName)}`;
+      
+      if (fileInfo.csvBase64) {
+        try {
+          const binary = atob(fileInfo.csvBase64);
+          const bytes = new Uint8Array(binary.length);
+          for (let i = 0; i < binary.length; i++) {
+            bytes[i] = binary.charCodeAt(i);
+          }
+          const blob = new Blob([bytes], { type: 'text/csv;charset=utf-8;' });
+          downloadUrl = URL.createObjectURL(blob);
+        } catch (err) {
+          console.error('Failed to create Blob URL, using fallback download URL:', err);
+        }
+      }
+
       downloadHtml += `
-        <a href="${API_BASE}/api/download/${encodeURIComponent(fileInfo.fileName)}" class="btn ${dc.btnClass} ${sizeClass}" download>
+        <a href="${downloadUrl}" download="${fileInfo.fileName}" class="btn ${dc.btnClass} ${sizeClass}">
           <span class="btn-icon">${dc.icon}</span> ${dc.label} (${fileInfo.count.toLocaleString()})
         </a>
       `;

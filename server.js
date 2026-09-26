@@ -806,7 +806,10 @@ async function processVerification(jobId, uploadInfo, phoneColumns, countryCode)
     XLSX.utils.book_append_sheet(wb, sheet, filterSet.label);
     const csvBuffer = Buffer.from(XLSX.write(wb, { bookType: 'csv', type: 'buffer' }));
 
-    // Store in memory for Vercel downloads
+    // Store CSV as base64 for client-side download (works everywhere including Vercel)
+    const csvBase64 = csvBuffer.toString('base64');
+
+    // Store in memory for same-instance downloads
     downloadStore.set(fileName, { buffer: csvBuffer, mimeType: 'text/csv' });
 
     // Also try to write to disk (works locally, fails silently on Vercel)
@@ -815,10 +818,17 @@ async function processVerification(jobId, uploadInfo, phoneColumns, countryCode)
       autoPath = path.join(__dirname, fileName);
       fs.copyFileSync(filePath, autoPath);
     } catch (e) {
-      // Read-only filesystem on Vercel — downloads will be served from memory
+      // Read-only filesystem on Vercel
     }
 
-    outputFiles[filterSet.suffix] = { fileName, count: filteredData.length, label: filterSet.label, autoSavePath: autoPath };
+    outputFiles[filterSet.suffix] = { fileName, count: filteredData.length, label: filterSet.label, autoSavePath: autoPath, csvBase64 };
+  }
+
+  // Strip csvBase64 from history (too large to persist) but keep for SSE
+  const outputFilesForHistory = {};
+  for (const [key, val] of Object.entries(outputFiles)) {
+    const { csvBase64, ...rest } = val;
+    outputFilesForHistory[key] = rest;
   }
 
   // Save batch job metadata for organized History view
@@ -833,7 +843,7 @@ async function processVerification(jobId, uploadInfo, phoneColumns, countryCode)
     failCount,
     errorCount,
     stats,
-    outputFiles,
+    outputFiles: outputFilesForHistory,
     autoSavePath: outputFiles.ALL?.autoSavePath || ''
   };
 
@@ -850,6 +860,7 @@ async function processVerification(jobId, uploadInfo, phoneColumns, countryCode)
   // Save config (updated credits after batch)
   saveConfig();
 
+  // Send completion with full CSV data (including base64) for client-side download
   sendProgress(jobId, {
     type: 'complete',
     apiProvider: config.apiProvider,
